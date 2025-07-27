@@ -1,0 +1,259 @@
+{
+    "nodes": [
+      {
+        "parameters": {
+          "owner": {
+            "__rl": true,
+            "value": "{{GITHUB_USERNAME}}",
+            "mode": "name"
+          },
+          "repository": {
+            "__rl": true,
+            "value": "{{REPOSITORY_NAME}}",
+            "mode": "list",
+            "cachedResultName": "{{REPOSITORY_NAME}}",
+            "cachedResultUrl": "https://github.com/{{GITHUB_USERNAME}}/{{REPOSITORY_NAME}}"
+          },
+          "events": [
+            "pull_request"
+          ],
+          "options": {}
+        },
+        "type": "n8n-nodes-base.githubTrigger",
+        "typeVersion": 1,
+        "position": [
+          384,
+          304
+        ],
+        "id": "5eb3b7f8-cef3-4642-b139-7c202e1a4707",
+        "name": "Github Trigger1",
+        "webhookId": "{{WEBHOOK_ID_1}}",
+        "credentials": {
+          "githubApi": {
+            "id": "{{GITHUB_CREDENTIAL_ID}}",
+            "name": "GitHub account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "url": "=https://api.github.com/repos/{{$json.body.sender.login}}/{{$json.body.repository.name}}/pulls/{{$json.body.number}}/files",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          592,
+          304
+        ],
+        "id": "c3252545-1942-4e1f-b3a0-0e7d163b2e26",
+        "name": "HTTP Request",
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "{{HTTP_HEADER_AUTH_CREDENTIAL_ID}}",
+            "name": "Header Auth account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const files = $input.all().map(item => item.json);\n\nlet diffs = '';\n\nfor (const file of files) {\n  diffs += `### Fichier : ${file.filename}\\n\\n`;\n\n  if (file.patch) {\n    // IMPORTANT : On remplace tous les triple backticks par simple (ou échappement)\n    const safePatch = file.patch.replace(/```/g, \"''\");\n\n    diffs += \"```diff\\n\";\n    diffs += safePatch;\n    diffs += \"\\n```\\n\";\n  } else {\n    diffs += \"_Pas de patch disponible (probablement fichier binaire)._\";\n  }\n\n  diffs += \"\\n---\\n\\n\";\n}\n\nconst userMessage = `\nYou are a senior iOS developer. \nPlease review the following code changes in these files :\n\n${diffs}\n\n---\n\nYour mission:\n\n- Review the proposed code changes file by file and by significant modification.\n\n- Generate inline comments on the relevant lines of code.\n\n- Ignore files without patches.\n\n- Do not repeat the code snippet or the filename.\n\n- Write the comments directly, without introducing the context.\n`;\n\nreturn [\n  {\n    json: {\n      user_message: userMessage.trim()\n    }\n  }\n];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          768,
+          304
+        ],
+        "id": "54b7658a-b655-45df-9578-49929d137048",
+        "name": "Code"
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "={{ $json.user_message }}",
+          "options": {
+            "systemMessage": "You are a professional code reviewer. Please analyze the changes in GitHub Pull Request and provide constructive feedback."
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 2.1,
+        "position": [
+          976,
+          304
+        ],
+        "id": "a2e0d711-6dcb-400c-8665-b975c33bbc9a",
+        "name": "AI Agent1"
+      },
+      {
+        "parameters": {
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+        "typeVersion": 1,
+        "position": [
+          992,
+          512
+        ],
+        "id": "ba0db428-36d4-43f2-954d-c89cf01d530a",
+        "name": "Google Gemini Chat Model",
+        "credentials": {
+          "googlePalmApi": {
+            "id": "{{GOOGLE_GEMINI_CREDENTIAL_ID}}",
+            "name": "Google Gemini(PaLM) Api account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "resource": "review",
+          "owner": {
+            "__rl": true,
+            "value": "{{GITHUB_USERNAME}}",
+            "mode": "name"
+          },
+          "repository": {
+            "__rl": true,
+            "value": "{{REPOSITORY_NAME}}",
+            "mode": "list",
+            "cachedResultName": "{{REPOSITORY_NAME}}",
+            "cachedResultUrl": "https://github.com/{{GITHUB_USERNAME}}/{{REPOSITORY_NAME}}"
+          },
+          "pullRequestNumber": "={{ $('Github Trigger').first().json.body.number }}",
+          "event": "comment",
+          "body": "={{ $json.output }}",
+          "additionalFields": {}
+        },
+        "type": "n8n-nodes-base.github",
+        "typeVersion": 1.1,
+        "position": [
+          1328,
+          304
+        ],
+        "id": "dc8e47b5-156b-4a37-a9ab-0eb045d4ce70",
+        "name": "Create a review",
+        "webhookId": "{{WEBHOOK_ID_2}}",
+        "credentials": {
+          "githubApi": {
+            "id": "{{GITHUB_CREDENTIAL_ID}}",
+            "name": "GitHub account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "edit",
+          "owner": {
+            "__rl": true,
+            "value": "{{GITHUB_USERNAME}}",
+            "mode": "name"
+          },
+          "repository": {
+            "__rl": true,
+            "value": "{{REPOSITORY_NAME}}",
+            "mode": "list",
+            "cachedResultName": "{{REPOSITORY_NAME}}",
+            "cachedResultUrl": "https://github.com/{{GITHUB_USERNAME}}/{{REPOSITORY_NAME}}"
+          },
+          "issueNumber": "={{ $('Github Trigger').first().json.body.number }}",
+          "editFields": {
+            "labels": [
+              {
+                "label": "ReviewedByAI"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.github",
+        "typeVersion": 1.1,
+        "position": [
+          1536,
+          304
+        ],
+        "id": "bbd5856c-2cd4-4d45-80e0-2580e40855c0",
+        "name": "Edit an issue",
+        "webhookId": "{{WEBHOOK_ID_3}}",
+        "credentials": {
+          "githubApi": {
+            "id": "{{GITHUB_CREDENTIAL_ID}}",
+            "name": "GitHub account"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Github Trigger1": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP Request": {
+        "main": [
+          [
+            {
+              "node": "Code",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code": {
+        "main": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Agent1": {
+        "main": [
+          [
+            {
+              "node": "Create a review",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Google Gemini Chat Model": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create a review": {
+        "main": [
+          [
+            {
+              "node": "Edit an issue",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "pinData": {},
+    "meta": {
+      "templateCredsSetupCompleted": true,
+      "instanceId": "{{INSTANCE_ID}}"
+    }
+  }
